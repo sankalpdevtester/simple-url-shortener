@@ -14,80 +14,93 @@ class CacheManager {
     this.config = config;
   }
 
-  public getCacheKey(url: string): string {
-    return `url:${url}`;
-  }
-
-  public async get(url: string): Promise<string | null> {
-    const cacheKey = this.getCacheKey(url);
-    if (this.cache[cacheKey]) {
-      const cacheItem = this.cache[cacheKey];
-      if (cacheItem.expiration > Date.now()) {
-        return cacheItem.value;
-      } else {
-        delete this.cache[cacheKey];
-      }
+  public get(key: string): CacheItem | undefined {
+    const item = this.cache[key];
+    if (!item) return undefined;
+    if (item.expiration < Date.now()) {
+      delete this.cache[key];
+      return undefined;
     }
-    return null;
+    return item;
   }
 
-  public async set(url: string, value: string): Promise<void> {
-    const cacheKey = this.getCacheKey(url);
-    const expiration = Date.now() + this.config.ttl * 1000;
-    this.cache[cacheKey] = {
-      value,
-      expiration,
+  public set(key: string, value: any): void {
+    const item: CacheItem = {
       id: uuidv4(),
+      key,
+      value,
+      expiration: Date.now() + this.config.ttl * 1000,
     };
+    this.cache[key] = item;
   }
 
-  public async delete(url: string): Promise<void> {
-    const cacheKey = this.getCacheKey(url);
-    delete this.cache[cacheKey];
+  public delete(key: string): void {
+    delete this.cache[key];
   }
 
-  public async clear(): Promise<void> {
+  public clear(): void {
     this.cache = {};
   }
 }
 
 const cacheConfig: CacheConfig = {
-  ttl: 3600, // 1 hour
+  ttl: 60, // 1 minute
 };
 
 const cacheManager = new CacheManager(cacheConfig);
 
 export { cacheManager };
-``}
+
+// Example usage:
+// cacheManager.set('shortUrl', 'https://example.com');
+// const cachedValue = cacheManager.get('shortUrl');
+// cacheManager.delete('shortUrl');
+// cacheManager.clear();
+```
 
 ```typescript
 // src/models/CacheItem.ts
-interface CacheItem {
-  value: string;
-  expiration: number;
+export interface CacheItem {
   id: string;
+  key: string;
+  value: any;
+  expiration: number;
 }
-
-export { CacheItem };
-``}
+```
 
 ```typescript
-// src/routes/shortenUrlController.ts (update to use cacheManager)
-import { Request, Response } from 'express';
-import { cacheManager } from '../utils/cacheManager';
-import { UrlService } from '../services/UrlService';
+// Update src/utils/cache.ts to use the new cache manager
+// src/utils/cache.ts
+import { cacheManager } from './cacheManager';
 
-const shortenUrlController = async (req: Request, res: Response) => {
-  const { url } = req.body;
-  const cachedUrl = await cacheManager.get(url);
-  if (cachedUrl) {
-    return res.json({ shortenedUrl: cachedUrl });
-  }
-
-  const shortenedUrl = await UrlService.shortenUrl(url);
-  await cacheManager.set(url, shortenedUrl);
-  return res.json({ shortenedUrl });
+const cache = {
+  get: (key: string) => cacheManager.get(key),
+  set: (key: string, value: any) => cacheManager.set(key, value),
+  delete: (key: string) => cacheManager.delete(key),
+  clear: () => cacheManager.clear(),
 };
 
-export { shortenUrlController };
-``}
+export default cache;
+```
+
+```typescript
+// Update src/routes/shortenUrlController.ts to use the cache
+// src/routes/shortenUrlController.ts
+import { Request, Response } from 'express';
+import { cache } from '../utils/cache';
+import { ShortenUrlService } from '../services/ShortenUrlService';
+
+const shortenUrlController = {
+  async shortenUrl(req: Request, res: Response) {
+    const { url } = req.body;
+    const cachedValue = cache.get(url);
+    if (cachedValue) {
+      return res.json(cachedValue);
+    }
+    const shortenedUrl = await ShortenUrlService.shortenUrl(url);
+    cache.set(url, shortenedUrl);
+    return res.json(shortenedUrl);
+  },
+};
+
+export default shortenUrlController;
