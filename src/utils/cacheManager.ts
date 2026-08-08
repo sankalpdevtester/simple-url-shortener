@@ -7,31 +7,27 @@ interface CacheConfig {
 }
 
 class CacheManager {
-  private cache: { [key: string]: CacheItem } = {};
+  private cache: { [key: string]: CacheItem };
   private config: CacheConfig;
 
   constructor(config: CacheConfig) {
+    this.cache = {};
     this.config = config;
   }
 
-  public get(key: string): CacheItem | undefined {
+  public get(key: string): any {
     const item = this.cache[key];
-    if (!item) return undefined;
+    if (!item) return null;
     if (item.expiration < Date.now()) {
       delete this.cache[key];
-      return undefined;
+      return null;
     }
-    return item;
+    return item.value;
   }
 
   public set(key: string, value: any): void {
-    const item: CacheItem = {
-      id: uuidv4(),
-      key,
-      value,
-      expiration: Date.now() + this.config.ttl * 1000,
-    };
-    this.cache[key] = item;
+    const expiration = Date.now() + this.config.ttl * 1000;
+    this.cache[key] = { value, expiration, id: uuidv4() };
   }
 
   public delete(key: string): void {
@@ -61,46 +57,23 @@ export { cacheManager };
 ```typescript
 // src/models/CacheItem.ts
 export interface CacheItem {
-  id: string;
-  key: string;
   value: any;
   expiration: number;
+  id: string;
 }
 ```
 
 ```typescript
-// Update src/utils/cache.ts to use the new cache manager
-// src/utils/cache.ts
-import { cacheManager } from './cacheManager';
+// src/services/ShortenUrlService.ts (updated)
+import { cacheManager } from '../utils/cacheManager';
 
-const cache = {
-  get: (key: string) => cacheManager.get(key),
-  set: (key: string, value: any) => cacheManager.set(key, value),
-  delete: (key: string) => cacheManager.delete(key),
-  clear: () => cacheManager.clear(),
-};
+// ...
 
-export default cache;
-```
+public async shortenUrl(longUrl: string): Promise<string> {
+  const cachedShortUrl = cacheManager.get(longUrl);
+  if (cachedShortUrl) return cachedShortUrl;
 
-```typescript
-// Update src/routes/shortenUrlController.ts to use the cache
-// src/routes/shortenUrlController.ts
-import { Request, Response } from 'express';
-import { cache } from '../utils/cache';
-import { ShortenUrlService } from '../services/ShortenUrlService';
-
-const shortenUrlController = {
-  async shortenUrl(req: Request, res: Response) {
-    const { url } = req.body;
-    const cachedValue = cache.get(url);
-    if (cachedValue) {
-      return res.json(cachedValue);
-    }
-    const shortenedUrl = await ShortenUrlService.shortenUrl(url);
-    cache.set(url, shortenedUrl);
-    return res.json(shortenedUrl);
-  },
-};
-
-export default shortenUrlController;
+  const shortUrl = await this.generateShortUrl(longUrl);
+  cacheManager.set(longUrl, shortUrl);
+  return shortUrl;
+}
