@@ -52,28 +52,3 @@ export { cacheManager };
 // const cachedValue = cacheManager.get('shortUrl');
 // cacheManager.delete('shortUrl');
 // cacheManager.clear();
-```
-
-```typescript
-// src/models/CacheItem.ts
-export interface CacheItem {
-  value: any;
-  expiration: number;
-  id: string;
-}
-```
-
-```typescript
-// src/services/ShortenUrlService.ts (updated)
-import { cacheManager } from '../utils/cacheManager';
-
-// ...
-
-public async shortenUrl(longUrl: string): Promise<string> {
-  const cachedShortUrl = cacheManager.get(longUrl);
-  if (cachedShortUrl) return cachedShortUrl;
-
-  const shortUrl = await this.generateShortUrl(longUrl);
-  cacheManager.set(longUrl, shortUrl);
-  return shortUrl;
-}

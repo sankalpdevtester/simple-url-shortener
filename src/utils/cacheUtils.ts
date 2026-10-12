@@ -51,28 +51,3 @@ export { cacheUtils };
 // const cachedValue = cacheUtils.get('shortUrl');
 // cacheUtils.delete('shortUrl');
 // cacheUtils.clear();
-```
-
-```typescript
-// src/models/CacheItem.ts
-export interface CacheItem {
-  value: any;
-  expiration: number;
-  id: string;
-}
-```
-
-```typescript
-// Update src/services/ShortenUrlService.ts to use cacheUtils
-import { cacheUtils } from '../utils/cacheUtils';
-
-// ...
-
-public async shortenUrl(longUrl: string): Promise<string> {
-  const cachedShortUrl = cacheUtils.get(longUrl);
-  if (cachedShortUrl) return cachedShortUrl;
-
-  const shortUrl = await this.urlService.shortenUrl(longUrl);
-  cacheUtils.set(longUrl, shortUrl);
-  return shortUrl;
-}
